@@ -1,49 +1,91 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart'; // Add file_picker package dependency
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import 'result_screen.dart';
 
 class AssessmentScreen extends StatefulWidget {
   const AssessmentScreen({super.key});
 
   @override
-  _AssessmentScreenState createState() {
-    return _AssessmentScreenState();
-  }
+  State<AssessmentScreen> createState() => _AssessmentScreenState();
 }
 
 class _AssessmentScreenState extends State<AssessmentScreen> {
   bool isUploading = false;
-  bool isUploaded = false;
-  double accuracy = 75.0; // Example accuracy
-  String riskLevel = "Moderate Risk"; // Example risk level
   String? fileName;
+  String? filePath;
+  String? errorMessage;
 
-  // This function opens the file picker to select an audio file.
-  void uploadAudio() async {
+  Future<void> uploadAndPredictAudio() async {
     setState(() {
       isUploading = true;
-      isUploaded = false;
+      errorMessage = null;
+      fileName = null;
+      filePath = null;
     });
 
-    // Open the file picker with allowed audio file types.
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['mp3', 'wav', 'm4a'],
-    );
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['mp3', 'wav', 'm4a'],
+      );
 
-    if (result != null) {
+      if (result == null || result.files.single.path == null) {
+        setState(() {
+          isUploading = false;
+          errorMessage = 'No file selected.';
+        });
+        return;
+      }
+
+      filePath = result.files.single.path!;
+      fileName = result.files.single.name;
+
+      var uri = Uri.parse('http://127.0.0.1:5000/predict');
+      var request = http.MultipartRequest('POST', uri)
+        ..files.add(await http.MultipartFile.fromPath('file', filePath!));
+
+      var response = await request.send().timeout(const Duration(seconds: 500));
+      final responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        final data = json.decode(responseBody);
+
+        // Extract prediction and confidence
+        String prediction = data['class_name'];
+        double accuracy = prediction == 'AD'
+            ? (data['confidence']['AD'] * 100)
+            : (data['confidence']['CN'] * 100);
+
+        String riskLevel = prediction == 'AD'
+            ? (accuracy > 85 ? "High Risk" : "Moderate Risk")
+            : (accuracy > 85 ? "Low Risk" : "Very Low Risk");
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ResultScreen(
+              accuracy: accuracy,
+              riskLevel: riskLevel,
+            ),
+          ),
+        );
+      } else {
+        setState(() {
+          errorMessage = "Server error: $responseBody";
+        });
+      }
+    } catch (e) {
       setState(() {
-        isUploading = false;
-        isUploaded = true;
-        fileName = result.files.single.name;
-      });
-    } else {
-      // User canceled the picker.
-      setState(() {
-        isUploading = false;
-        isUploaded = false;
+        errorMessage = "Unexpected error: ${e.toString()}";
       });
     }
+
+    setState(() {
+      isUploading = false;
+    });
   }
 
   @override
@@ -57,72 +99,51 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
       ),
       body: Center(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Image related to dementia
-              Image.asset(
-                'assets/images/png/upload_rec.png',
-                height: 350,
-                width: 350,
-              ),
+              Image.asset('assets/images/png/upload_rec.png', height: 280),
               const SizedBox(height: 20),
-              // Instruction text to upload the audio file.
               const Text(
                 'Please upload an audio recording to test cognitive functions.',
-                style: TextStyle(color: Colors.black, fontSize: 18),
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, color: Colors.black87),
               ),
-              const SizedBox(height: 20),
-              // Upload Audio File button.
-              ElevatedButton(
+              const SizedBox(height: 25),
+              ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  iconColor: Colors.teal,  // Greenish button color
+                  backgroundColor: Colors.teal,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                onPressed: isUploading ? null : uploadAudio,
-                child: isUploading
-                    ? const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                )
-                    : const Text(
-                  'Upload Audio File',
-                  style: TextStyle(color: Colors.white),
+                onPressed: isUploading ? null : uploadAndPredictAudio,
+                icon: const Icon(Icons.upload_file),
+                label: const Text(
+                  'Upload & Predict',
+                  style: TextStyle(color: Colors.black87),
                 ),
               ),
-              const SizedBox(height: 10),
-              // Display file upload status.
-              Text(
-                isUploaded
-                    ? 'Uploaded: $fileName'
-                    : 'No audio file uploaded yet',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
+              const SizedBox(height: 15),
+              if (fileName != null)
+                Text(
+                  'Selected: $fileName',
+                  style: const TextStyle(fontSize: 16),
                 ),
-              ),
-              const SizedBox(height: 20),
-              // "See Results" button appears after successful upload.
-              if (isUploaded)
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,  // Greenish button color
+              if (errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontSize: 14),
                   ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ResultScreen(
-                          accuracy: accuracy,
-                          riskLevel: riskLevel,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Click to Proceed',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                ),
+              if (isUploading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 30),
+                  child: CircularProgressIndicator(),
                 ),
             ],
           ),

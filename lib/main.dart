@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
         primaryColor: Colors.deepPurple.shade200,
         scaffoldBackgroundColor: Colors.black,
       ),
-      home: AudioPredictPage(),
+      home: SplashScreen(),
     );
   }
 }
