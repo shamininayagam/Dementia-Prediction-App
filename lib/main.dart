@@ -1,3 +1,4 @@
+import 'package:dem_app/screens/audio_predict_page.dart';
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
 
@@ -14,7 +15,7 @@ class MyApp extends StatelessWidget {
         primaryColor: Colors.deepPurple.shade200,
         scaffoldBackgroundColor: Colors.black,
       ),
-      home: SplashScreen(),
+      home: AudioPredictPage(),
     );
   }
 }

@@ -77,7 +77,7 @@ class _ResultScreenState extends State<ResultScreen> {
               Text(
                 'Estimated Accuracy: ${widget.accuracy.toStringAsFixed(1)}%',
                 style: const TextStyle(
-                    fontSize: 18, color: Colors.black26),
+                    fontSize: 18, color: Colors.black87),
               ),
               const SizedBox(height: 10),
               Text(
